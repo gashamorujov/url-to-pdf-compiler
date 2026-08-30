@@ -45,10 +45,10 @@ export function ActionBar({
         </div>
       )}
 
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-3 px-4 py-3">
         <button
           onClick={onTogglePreview}
-          className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
         >
           {previewOpen ? 'Hide Preview' : 'Show Preview'}
         </button>
@@ -69,11 +69,11 @@ export function ActionBar({
             Download Again
           </button>
         )}
-
-        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
-          {entriesCount > 0 ? `${entriesCount} URL(s) loaded` : ''}
-        </span>
       </div>
+
+      <p className="pb-3 text-center text-xs text-gray-400 dark:text-gray-500">
+        {entriesCount > 0 ? `${entriesCount} URL(s) loaded` : ''}
+      </p>
     </div>
   );
 }

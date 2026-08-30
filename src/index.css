@@ -32,3 +32,42 @@ body {
 .dark ::-webkit-scrollbar-thumb {
   @apply bg-gray-700;
 }
+
+/* Rare, slow glitch effect for the hero tagline */
+.glitch-rare {
+  position: relative;
+  display: inline-block;
+}
+.glitch-rare::before,
+.glitch-rare::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  clip-path: inset(0 0 100% 0);
+  opacity: 0;
+  pointer-events: none;
+}
+.glitch-rare::before {
+  color: #e11d48;
+}
+.glitch-rare::after {
+  color: #0891b2;
+}
+@keyframes glitchRare {
+  0%, 86% { clip-path: inset(0 0 100% 0); opacity: 0; }
+  86.2%  { clip-path: inset(20% 0 68% 0); opacity: 1; transform: translate(-2px, 1px); }
+  86.4%  { clip-path: inset(62% 0 28% 0); opacity: 1; transform: translate(2px, -1px); }
+  86.6%  { clip-path: inset(40% 0 50% 0); opacity: 1; transform: translate(-1px, 2px); }
+  86.8%  { clip-path: inset(75% 0 15% 0); opacity: 1; transform: translate(1px, -2px); }
+  87%    { clip-path: inset(10% 0 82% 0); opacity: 1; transform: translate(-2px, 0); }
+  87.2%  { clip-path: inset(0 0 100% 0); opacity: 0; }
+  100%   { clip-path: inset(0 0 100% 0); opacity: 0; }
+}
+.glitch-rare::before {
+  animation: glitchRare 9s linear infinite;
+}
+.glitch-rare::after {
+  animation: glitchRare 9s linear infinite reverse;
+  animation-delay: 0.4s;
+}

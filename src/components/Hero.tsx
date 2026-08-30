@@ -1,11 +1,6 @@
 export function Hero() {
   return (
     <section className="relative mx-auto w-full max-w-6xl px-4 pt-10 pb-2 text-center sm:pt-14 sm:pb-4">
-      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-indigo-600 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">
-        <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400" />
-        URL to PDF Compiler
-      </div>
-
       <h2
         className="text-5xl font-black uppercase leading-none tracking-tight text-transparent sm:text-7xl md:text-8xl"
         style={{
@@ -23,8 +18,11 @@ export function Hero() {
         <span className="h-px flex-1 bg-gradient-to-l from-transparent to-indigo-400/60 dark:to-indigo-500/60" />
       </div>
 
-      <p className="mx-auto mt-6 max-w-2xl text-base font-bold uppercase leading-relaxed tracking-[0.12em] text-gray-700 sm:text-xl md:text-2xl dark:text-gray-200">
-        The life is <span className="text-indigo-600 dark:text-indigo-400">not fair</span>, you should not be a fair
+      <p
+        className="glitch-rare mx-auto mt-6 max-w-2xl text-base font-bold uppercase leading-relaxed tracking-[0.12em] text-black sm:text-xl md:text-2xl dark:text-gray-100"
+        data-text="The life is not fair, you should not be a fair"
+      >
+        The life is not fair, you should not be a fair
       </p>
 
       <p className="mt-5 text-[11px] uppercase tracking-[0.3em] text-gray-400 sm:text-xs dark:text-gray-500">
