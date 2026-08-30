@@ -7,6 +7,8 @@ import { generatePdf, type PdfPageInput } from './lib/pdfGenerator';
 import { useTheme } from './hooks/useTheme';
 import { useToasts } from './hooks/useToasts';
 import { Header } from './components/Header';
+import { Hero } from './components/Hero';
+import { Footer } from './components/Footer';
 import { UrlInput } from './components/UrlInput';
 import { UrlTable } from './components/UrlTable';
 import { PreviewPanel } from './components/PreviewPanel';
@@ -268,10 +270,15 @@ export default function App() {
   const failedCount = entries.filter((entry) => entry.status === 'error').length;
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="relative flex min-h-full flex-col overflow-x-hidden">
+      <div className="cyber-grid" aria-hidden />
+      <div className="cyber-scanline" aria-hidden />
+
       <Header theme={theme} onToggleTheme={toggleTheme} />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 pb-28">
+      <Hero />
+
+      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 pb-28">
         <UrlInput value={rawInput} onChange={setRawInput} onAnalyze={handleAnalyze} detecting={analyzing} />
 
         {analyzed && entries.length > 0 && (
@@ -330,6 +337,8 @@ export default function App() {
       />
 
       <ToastStack toasts={toasts} onDismiss={dismiss} />
+
+      <Footer />
     </div>
   );
 }
