@@ -71,3 +71,16 @@ If you deploy to a custom domain, add its URL pattern to the
 ## License
 
 Same as the parent project.
+
+## Session detection
+
+Login status is detected by checking for IMO session cookies (`JSESSIONID`,
+`AWSALB`) in the browser. The extension only checks **whether** a session cookie
+exists — it never reads, copies, or sends the cookie value anywhere. When you
+log in or log out of `imo-epublications.org`, the web app picks up the change
+automatically (it detects the cookie presence) and refreshes its status.
+
+The content bridge is injected on **all origins** (`<all_urls>`) so the tool
+works on any deployed domain. The bridge is inert by design — it only relays
+messages that carry the `__imo_bridge__` marker from the page to the extension
+background, and never inspects page content.

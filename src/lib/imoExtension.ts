@@ -66,8 +66,8 @@ async function bridgeRequest<T>(payload: Record<string, unknown>, timeoutMs = RE
 
 /**
  * Detect whether the extension (plus its content bridge) is available.
- * The web app must be running on an origin matched by the extension's
- * content_scripts (localhost, vercel.app, netlify.app, github.io).
+ * The content bridge is injected on ALL origins, so this works on any
+ * deployment of the web app.
  */
 export async function isExtensionAvailable(): Promise<boolean> {
   if (extensionAvailable !== undefined) return extensionAvailable;
@@ -85,7 +85,7 @@ export function resetExtensionDetection() {
 }
 
 // ---------------------------------------------------------------------------
-// Authentication status (no credentials are involved — just HTTP probing)
+// Authentication status (no credentials are involved — just cookie presence)
 // ---------------------------------------------------------------------------
 
 export async function checkImoAuth(): Promise<ImoAuthResult> {
@@ -136,11 +136,19 @@ export async function fetchImoImage(url: string): Promise<ImoFetchedImage> {
 // ---------------------------------------------------------------------------
 
 /**
- * Open the official IMO sign-in page in a new tab. All authentication happens
- * on the IMO domain; this app never collects credentials.
+ * Open the official IMO sign-in page in a new tab (routed through the
+ * extension so it opens reliably and carries the extension context). All
+ * authentication happens on the IMO domain; this app never collects credentials.
  */
-export function openImoLogin() {
-  if (typeof window !== 'undefined') {
-    window.open(IMO_LOGIN_URL, '_blank', 'noopener');
+export async function openImoLogin(): Promise<void> {
+  const available = await isExtensionAvailable();
+  if (available) {
+    try {
+      await bridgeRequest<{ ok: boolean }>({ type: 'IMO_OPEN_LOGIN' }, 5000);
+      return;
+    } catch {
+      // fall through to window.open fallback
+    }
   }
+  window.open(IMO_LOGIN_URL, '_blank', 'noopener');
 }

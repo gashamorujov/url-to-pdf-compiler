@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { checkImoAuth, openImoLogin, resetExtensionDetection, type ImoAuthResult } from '../lib/imoExtension';
 
-const POLL_INTERVAL_MS = 20_000;
+const POLL_INTERVAL_MS = 12_000;
 
 interface ImoAuthBarProps {
   /** When true, forces a "login required" banner regardless of current auth state */
@@ -12,43 +12,45 @@ export function ImoAuthBar({ hasAuthErrors = false }: ImoAuthBarProps) {
   const [status, setStatus] = useState<ImoAuthResult>({ available: false, authenticated: null });
   const [checking, setChecking] = useState(false);
   const [initializing, setInitializing] = useState(true);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const openSetRef = useRef(false);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setChecking(true);
     try {
       const result = await checkImoAuth();
-      setStatus(result);
+      setStatus((current) => (JSON.stringify(current) === JSON.stringify(result) ? current : result));
     } catch {
       setStatus({ available: false, authenticated: null });
-    }
-    setChecking(false);
-  };
-
-  // Initial probe + polls when not authenticated and extension is present
-  useEffect(() => {
-    (async () => {
-      await refresh();
+    } finally {
+      setChecking(false);
       setInitializing(false);
-    })();
+    }
   }, []);
 
+  // Initial probe
   useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (status.available && status.authenticated === false) {
-      pollRef.current = setInterval(refresh, POLL_INTERVAL_MS);
-    }
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [status.available, status.authenticated]);
+    if (openSetRef.current) return;
+    openSetRef.current = true;
+    void refresh();
+  }, [refresh]);
 
-  // Refresh on visibility change (user may return from IMO after login)
+  // Poll while the user is not authenticated (they may be logging in on IMO).
+  // Also refresh whenever the page regains focus (returning from the IMO tab).
   useEffect(() => {
+    const interval = setInterval(() => {
+      if (status.available && status.authenticated === false) void refresh();
+    }, POLL_INTERVAL_MS);
     const onVis = () => {
-      if (document.visibilityState === 'visible' && status.available) void refresh();
+      if (document.visibilityState === 'visible') void refresh();
     };
     document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-  }, [status.available]);
+    window.addEventListener('focus', onVis);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onVis);
+    };
+  }, [status.available, status.authenticated, refresh]);
 
   const handleInstall = () => {
     window.open(
@@ -62,13 +64,14 @@ export function ImoAuthBar({ hasAuthErrors = false }: ImoAuthBarProps) {
     resetExtensionDetection();
     setStatus({ available: false, authenticated: null });
     setInitializing(true);
-    (async () => {
-      await refresh();
-      setInitializing(false);
-    })();
+    void refresh();
   };
 
-  // Extension not installed
+  const handleLogin = () => {
+    void openImoLogin();
+  };
+
+  // Extension not installed / not detected
   if (!status.available && !initializing) {
     return (
       <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/40">
@@ -98,12 +101,12 @@ export function ImoAuthBar({ hasAuthErrors = false }: ImoAuthBarProps) {
   }
 
   // Extension installed, authenticated
-  if (status.authenticated === true) {
+  if (status.authenticated === true && !hasAuthErrors) {
     return (
       <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/30">
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">✓ IMO session active</span>
-          <span className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Authenticated images are loaded via the extension.</span>
+          <span className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Authenticated images load automatically.</span>
           <button
             onClick={handleRefresh}
             className="ml-auto rounded px-2 py-1 text-xs text-emerald-600/80 transition hover:bg-emerald-100 dark:text-emerald-400/80 dark:hover:bg-emerald-900/40"
@@ -115,21 +118,22 @@ export function ImoAuthBar({ hasAuthErrors = false }: ImoAuthBarProps) {
     );
   }
 
-  // Extension installed, not authenticated (or checking)
+  // Extension installed, not authenticated (or checking) / auth errors present
+  const needsLogin = hasAuthErrors || status.authenticated === false;
   return (
     <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-800 dark:bg-amber-950/40">
       <div className="flex flex-wrap items-center gap-3">
-        {hasAuthErrors || status.authenticated === false ? (
+        {needsLogin ? (
           <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
             IMO premium login required
           </span>
+        ) : status.authenticated === null ? (
+          <span className="text-sm text-amber-700 dark:text-amber-400">Checking IMO session…</span>
         ) : (
-          <span className="text-sm text-amber-700 dark:text-amber-400">
-            Checking IMO session…
-          </span>
+          <span className="text-sm text-amber-700 dark:text-amber-400">Checking IMO session…</span>
         )}
         <button
-          onClick={openImoLogin}
+          onClick={handleLogin}
           className="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500"
         >
           Login to IMO

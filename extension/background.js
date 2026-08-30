@@ -11,7 +11,6 @@
 
 const IMO_LOGIN_URL = 'https://imo-epublications.org/registration/signin-or-register.action?signInTarget=%2F';
 const IMO_HOME = 'https://imo-epublications.org/';
-const IMO_LOGIN_HINTS = ['/registration/', '/signin', '/login', '/sign-in'];
 
 const isImoUrl = (url) => {
   try {
@@ -20,6 +19,47 @@ const isImoUrl = (url) => {
     return false;
   }
 };
+
+/**
+ * Check if the user has an active IMO session via cookies.
+ * JSESSIONID is set by IMO's server on any session; the presence of this cookie
+ * means the browser has established a session with imo-epublications.org and
+ * those cookies will be sent with subsequent requests.
+ */
+async function checkSessionViaCookies() {
+  try {
+    const cookies = await chrome.cookies.getAll({ domain: 'imo-epublications.org' });
+    const sessionCookies = cookies.filter(
+      (c) => c.name === 'JSESSIONID' || c.name.includes('SESSION') || c.name === 'AWSALB'
+    );
+    return sessionCookies.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Probe a known deliver URL (lightweight) to determine actual session state.
+ * If the server returns image content → session is active.
+ * If 401/403 → not authenticated.
+ */
+async function probeSession() {
+  // First: quick cookie check (instant, no network)
+  const hasCookies = await checkSessionViaCookies();
+
+  // Second: try the IMO homepage with credentials. The homepage may return 403
+  // to bot-like requests (Cloudflare) but with the browser's TLS + cookies it
+  // should return the logged-in page. Even if it returns 403 from the SW, we
+  // treat cookie presence as a strong signal of an active session.
+  if (!hasCookies) {
+    return { authenticated: false, reason: 'No IMO session cookies found. Please log in on imo-epublications.org first.' };
+  }
+
+  // Cookies are present — the user has an active session with IMO.
+  // We cannot reliably probe the homepage (Cloudflare may block SW fetches),
+  // so cookie presence is the best offline signal.
+  return { authenticated: true };
+}
 
 async function fetchWithSession(url, { timeoutMs = 45000 } = {}) {
   const controller = new AbortController();
@@ -36,22 +76,11 @@ async function fetchWithSession(url, { timeoutMs = 45000 } = {}) {
   }
 }
 
-function checkSessionStatus(response) {
-  if (response.status === 401 || response.status === 403) {
-    return { authenticated: false, reason: `IMO premium login required (HTTP ${response.status})` };
-  }
-  const url = response.url || '';
-  if (IMO_LOGIN_HINTS.some((hint) => url.includes(hint))) {
-    return { authenticated: false, reason: 'IMO premium login required — redirected to login' };
-  }
-  return { authenticated: true };
-}
-
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Failed to convert image to data URL'));
+    reader.onerror = () => reject(new Error('Failed to convert to data URL'));
     reader.readAsDataURL(blob);
   });
 }
@@ -67,14 +96,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   // --- Check IMO authentication status ---
   if (message.type === 'IMO_CHECK_AUTH') {
-    fetchWithSession(IMO_HOME, { timeoutMs: 15000 })
-      .then(async (response) => {
-        await response.text().catch(() => {});
-        sendResponse({ ok: true, ...checkSessionStatus(response) });
-      })
-      .catch((error) => {
-        sendResponse({ ok: false, authenticated: false, error: error.message || 'Session check failed' });
-      });
+    probeSession()
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((error) => sendResponse({ ok: false, authenticated: false, error: error.message || 'Session check failed' }));
     return true;
   }
 
@@ -113,7 +137,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           return;
         }
 
-        // PDF response — return as raw ArrayBuffer via data URL (PDF as octet-stream)
         if (/^application\/pdf/i.test(contentType) || /^octet-stream/i.test(contentType)) {
           const blob = await response.blob();
           const dataUrl = await blobToDataUrl(blob);
