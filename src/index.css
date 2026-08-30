@@ -49,20 +49,23 @@ body {
   pointer-events: none;
 }
 .glitch-rare::before {
-  color: #e11d48;
+  color: #22c55e;
 }
 .glitch-rare::after {
-  color: #0891b2;
+  color: #ef4444;
 }
 @keyframes glitchRare {
-  0%, 86% { clip-path: inset(0 0 100% 0); opacity: 0; }
-  86.2%  { clip-path: inset(20% 0 68% 0); opacity: 1; transform: translate(-2px, 1px); }
-  86.4%  { clip-path: inset(62% 0 28% 0); opacity: 1; transform: translate(2px, -1px); }
-  86.6%  { clip-path: inset(40% 0 50% 0); opacity: 1; transform: translate(-1px, 2px); }
-  86.8%  { clip-path: inset(75% 0 15% 0); opacity: 1; transform: translate(1px, -2px); }
-  87%    { clip-path: inset(10% 0 82% 0); opacity: 1; transform: translate(-2px, 0); }
-  87.2%  { clip-path: inset(0 0 100% 0); opacity: 0; }
-  100%   { clip-path: inset(0 0 100% 0); opacity: 0; }
+  0%, 82%  { clip-path: inset(0 0 100% 0); opacity: 0; }
+  82.3%    { clip-path: inset(15% 0 72% 0); opacity: 1; transform: translate(-3px, 2px); }
+  82.7%    { clip-path: inset(58% 0 30% 0); opacity: 1; transform: translate(3px, -2px); }
+  83.1%    { clip-path: inset(35% 0 52% 0); opacity: 1; transform: translate(-2px, 3px); }
+  83.5%    { clip-path: inset(70% 0 18% 0); opacity: 0.9; transform: translate(2px, -3px); }
+  83.9%    { clip-path: inset(8% 0 85% 0); opacity: 1; transform: translate(-3px, 0); }
+  84.3%    { clip-path: inset(45% 0 42% 0); opacity: 0.9; transform: translate(3px, 1px); }
+  84.7%    { clip-path: inset(80% 0 8% 0); opacity: 1; transform: translate(-1px, -2px); }
+  85.1%    { clip-path: inset(25% 0 65% 0); opacity: 1; transform: translate(2px, 2px); }
+  85.5%    { clip-path: inset(0 0 100% 0); opacity: 0; }
+  100%     { clip-path: inset(0 0 100% 0); opacity: 0; }
 }
 .glitch-rare::before {
   animation: glitchRare 9s linear infinite;
