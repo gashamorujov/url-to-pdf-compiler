@@ -74,11 +74,16 @@ Same as the parent project.
 
 ## Session detection
 
-Login status is detected by checking for IMO session cookies (`JSESSIONID`,
-`AWSALB`) in the browser. The extension only checks **whether** a session cookie
-exists — it never reads, copies, or sends the cookie value anywhere. When you
-log in or log out of `imo-epublications.org`, the web app picks up the change
-automatically (it detects the cookie presence) and refreshes its status.
+Authentication is verified with a **real HTTP probe**: the background service
+worker fetches `https://imo-epublications.org/` using the browser's existing
+session cookies (`credentials: 'include'`) and inspects the actual response.
+
+- `200` (no login redirect) → **authenticated** — the web app shows "IMO session active"
+- `401`/`403` or redirect to the sign-in page → **not authenticated** — the web
+  app shows "Not logged in to IMO" with a **Login to IMO** button
+- The "Login to IMO" button simply opens IMO's official sign-in page in a new
+  tab. Login happens entirely on IMO's own domain; the extension never collects,
+  stores, or forwards credentials.
 
 The content bridge is injected on **all origins** (`<all_urls>`) so the tool
 works on any deployed domain. The bridge is inert by design — it only relays
