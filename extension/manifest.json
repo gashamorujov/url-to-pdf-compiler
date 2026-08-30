@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "IMO Authenticated Bridge",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Bridges your authenticated imo-epublications.org session to the URL-to-PDF web app. Uses your existing browser session only — no passwords read, no credentials forwarded or stored.",
   "permissions": [],
   "host_permissions": [
@@ -9,6 +9,10 @@
   ],
   "background": {
     "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "IMO Authenticated Bridge — check session"
   },
   "content_scripts": [
     {
