@@ -5,49 +5,61 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IMO Bridge</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, -apple-system, sans-serif; width: 280px; padding: 16px; background: #fff; color: #1f2937; }
-.header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.header .icon { width: 24px; height: 24px; background: #4f46e5; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; }
-.header .title { font-size: 14px; font-weight: 700; }
-.status { padding: 8px 12px; border-radius: 8px; font-size: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
-.status.connected { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
-.status.disconnected { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
-.status.checking { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-.status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-.status .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.status.connected .dot { background: #10b981; }
-.status.disconnected .dot { background: #f59e0b; }
-.status.checking .dot { background: #3b82f6; animation: pulse 1s ease infinite; }
-.status.error .dot { background: #ef4444; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-.detail { font-size: 11px; color: #6b7280; margin-bottom: 10px; padding: 0 4px; line-height: 1.4; }
-.btn { display: block; width: 100%; padding: 8px 0; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; transition: background 0.15s; }
-.btn-primary { background: #4f46e5; color: #fff; }
-.btn-primary:hover { background: #4338ca; }
-.btn-outline { background: #fff; color: #4f46e5; border: 1px solid #e5e7eb; margin-top: 6px; }
-.btn-outline:hover { background: #f5f3ff; }
-.footer { margin-top: 14px; text-align: center; font-size: 10px; color: #9ca3af; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;width:320px;padding:16px;background:#fff;color:#1f2937}
+.hdr{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.hdr .ic{width:28px;height:28px;background:#4f46e5;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;letter-spacing:-0.5px}
+.hdr .nm{font-size:14px;font-weight:700}
+.hdr .v{font-size:10px;color:#9ca3af;margin-left:auto}
+.tag{padding:10px 12px;border-radius:10px;font-size:12px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.tag.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+.tag.no{background:#fef9c3;color:#854d0e;border:1px solid #fde68a}
+.tag.run{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+.tag.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.tag .d{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.tag.ok .d{background:#10b981}
+.tag.no .d{background:#f59e0b}
+.tag.run .d{background:#3b82f6;animation:p 1s ease infinite}
+.tag.err .d{background:#ef4444}
+@keyframes p{0%,100%{opacity:1}50%{opacity:.3}}
+.det{font-size:11px;color:#6b7280;margin-bottom:10px;padding:0 4px;line-height:1.5}
+.tab-info{font-size:11px;color:#6b7280;padding:6px 10px;background:#f9fafb;border-radius:8px;margin-bottom:10px;display:flex;align-items:center;gap:6px;border:1px solid #e5e7eb}
+.tab-info .dot{width:6px;height:6px;border-radius:50%}
+.tab-info .imo{background:#10b981}
+.tab-info .web{background:#4f46e5}
+.tab-info .other{background:#9ca3af}
+.btn{display:block;width:100%;padding:9px 0;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;text-align:center;transition:background .15s}
+.btn1{background:#4f46e5;color:#fff}
+.btn1:hover{background:#4338ca}
+.btn2{background:#fff;color:#4f46e5;border:1px solid #e5e7eb;margin-top:6px}
+.btn2:hover{background:#f5f3ff}
+.foot{margin-top:14px;text-align:center;font-size:10px;color:#9ca3af}
 </style>
 </head>
 <body>
-  <div class="header">
-    <div class="icon">IMO</div>
-    <div class="title">IMO Authenticated Bridge</div>
-  </div>
+<div class="hdr">
+  <div class="ic">IMO</div>
+  <div class="nm">IMO Auth Bridge</div>
+  <div class="v">v2.0</div>
+</div>
 
-  <div id="statusBox" class="status checking">
-    <span class="dot"></span>
-    <span id="statusText">Checking IMO session…</span>
-  </div>
+<div id="tabInfo" class="tab-info" style="display:none">
+  <span class="d"></span>
+  <span id="tabText"></span>
+</div>
 
-  <div id="detail" class="detail"></div>
+<div id="statusBox" class="tag run">
+  <span class="d"></span>
+  <span id="statusText">Detecting…</span>
+</div>
 
-  <button id="loginBtn" class="btn btn-primary" style="display:none">Login to IMO</button>
-  <button id="openBtn" class="btn btn-outline" style="display:none">Open Web App</button>
+<div id="detail" class="det"></div>
 
-  <div class="footer">v1.4.0 · No data leaves your browser</div>
+<button id="loginBtn" class="btn btn1" style="display:none">Login to IMO</button>
+<button id="webappBtn" class="btn btn2" style="display:none">Open Web App</button>
 
-  <script src="popup.js"></script>
+<div class="foot">v2.0 · Everything stays in your browser</div>
+
+<script src="popup.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface UrlInputProps {
   value: string;
@@ -7,9 +7,15 @@ interface UrlInputProps {
   detecting: boolean;
 }
 
+/**
+ * Auto-analyze when the textarea has URLs and the user pastes new content.
+ * Uses a 600ms debounce so rapid pastes don't trigger multiple analyses.
+ */
 export function UrlInput({ value, onChange, onAnalyze, detecting }: UrlInputProps) {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prevCountRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleFile = async (file: File) => {
     const text = await file.text();
@@ -18,13 +24,39 @@ export function UrlInput({ value, onChange, onAnalyze, detecting }: UrlInputProp
     onChange(combined);
   };
 
+  // Auto-analyze on paste: detect when new URLs appear and auto-trigger analysis
+  const handlePaste = () => {
+    // Give React a frame to update value, then check
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const currentLines = value.split(/\r?\n/).filter(Boolean).length;
+        if (currentLines > prevCountRef.current) {
+          onAnalyze();
+        }
+      }, 100);
+    });
+  };
+
+  // Auto-analyze when value grows (file drop, paste, typing)
+  const currentCount = value.split(/\r?\n/).filter(Boolean).length;
+  useEffect(() => {
+    if (currentCount > prevCountRef.current && currentCount > 0) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        onAnalyze();
+      }, 800);
+    }
+    prevCountRef.current = currentCount;
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [currentCount, onAnalyze]);
+
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
       <label htmlFor="urls" className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
         Image URLs
       </label>
       <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-        Paste one URL per line. You can mix scrambled page numbers — sorting is automatic. Drop a <code>.txt</code> file here too.
+        Paste one URL per line. Page numbers are detected and sorted automatically. Drop a <code>.txt</code> file here too.
       </p>
 
       <div
@@ -33,10 +65,7 @@ export function UrlInput({ value, onChange, onAnalyze, detecting }: UrlInputProp
             ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40'
             : 'border-gray-300 dark:border-gray-700'
         }`}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragging(true);
-        }}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(event) => {
           event.preventDefault();
@@ -49,7 +78,8 @@ export function UrlInput({ value, onChange, onAnalyze, detecting }: UrlInputProp
           id="urls"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={'https://example.com/file.pdf?pageNumber=1\nhttps://example.com/file.pdf?pageNumber=3\nhttps://example.com/file.pdf?pageNumber=2'}
+          onPaste={handlePaste}
+          placeholder={'https://imo-epublications.org/deliver//fulltext/...\nPaste URLs here — auto-analyzed…'}
           className="h-48 w-full resize-y bg-transparent p-3 text-sm outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
           spellCheck={false}
         />
@@ -81,7 +111,7 @@ export function UrlInput({ value, onChange, onAnalyze, detecting }: UrlInputProp
           }}
         />
         <span className="text-xs text-gray-400">
-          {value.trim().split(/\r?\n/).filter(Boolean).length} URL(s) detected
+          {currentCount} URL(s) detected
         </span>
       </div>
     </section>
