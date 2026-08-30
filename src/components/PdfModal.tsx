@@ -25,25 +25,25 @@ export function PdfModal({ isOpen, onCancel, onCreate }: PdfModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={onCancel}>
-      <div className="cyber-panel relative w-full max-w-sm p-6" onClick={(event) => event.stopPropagation()}>
-        <span className="cyber-panel-corner tl" />
-        <span className="cyber-panel-corner tr" />
-        <span className="cyber-panel-corner bl" />
-        <span className="cyber-panel-corner br" />
-        <h3 className="font-display mb-4 text-lg font-bold uppercase tracking-widest text-cyan-200 glow-cyan">Create PDF</h3>
-        <label className="mb-1 block text-xs uppercase tracking-widest text-cyan-400">PDF name</label>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm" onClick={onCancel}>
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900" onClick={(event) => event.stopPropagation()}>
+        <h3 className="mb-4 text-lg font-bold">Create PDF</h3>
+        <label className="mb-1 block text-sm text-gray-600 dark:text-gray-400">PDF name</label>
         <input
           autoFocus
           value={filename}
           onChange={(event) => { setFilename(event.target.value); setError(''); }}
           onKeyDown={(event) => { if (event.key === 'Enter') submit(); }}
-          className="cyber-input mb-1 rounded px-3 py-2 text-sm"
+          className="mb-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
         />
-        {error && <p className="mb-2 text-xs text-rose-400">{error}</p>}
+        {error && <p className="mb-2 text-xs text-rose-500">{error}</p>}
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="cyber-btn cyber-btn-ghost">Cancel</button>
-          <button onClick={submit} className="cyber-btn cyber-btn-primary">Create PDF</button>
+          <button onClick={onCancel} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium transition hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800">
+            Cancel
+          </button>
+          <button onClick={submit} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500">
+            Create PDF
+          </button>
         </div>
       </div>
     </div>

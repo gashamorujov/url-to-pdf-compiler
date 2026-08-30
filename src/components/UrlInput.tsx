@@ -19,73 +19,70 @@ export function UrlInput({ value, onChange, onAnalyze, detecting }: UrlInputProp
   };
 
   return (
-    <section className="cyber-panel cyber-panel-corner relative px-0 py-0">
-      <span className="cyber-panel-corner tl" />
-      <span className="cyber-panel-corner tr" />
-      <span className="cyber-panel-corner bl" />
-      <span className="cyber-panel-corner br" />
-      <div className="p-4 sm:p-6">
-        <div className="mb-1 flex items-center gap-2">
-          <span className="font-display text-sm font-bold uppercase tracking-widest text-cyan-300">Image URLs</span>
-          <span className="text-[10px] uppercase tracking-widest text-cyan-500/60">// input</span>
-        </div>
-        <p className="mb-3 text-xs text-cyan-100/50">
-          Paste one URL per line. Scrambled page numbers are auto-sorted. Drop a <code className="text-cyan-400">.txt</code> file too.
-        </p>
+    <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-6">
+      <label htmlFor="urls" className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+        Image URLs
+      </label>
+      <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        Paste one URL per line. You can mix scrambled page numbers — sorting is automatic. Drop a <code>.txt</code> file here too.
+      </p>
 
-        <div
-          className={`relative overflow-hidden border transition ${dragging ? 'border-cyan-400 bg-cyan-500/10 shadow-[0_0_24px_rgba(0,229,255,0.3)]' : 'border-cyan-500/25 bg-[#070a18]'}`}
-          onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            const file = event.dataTransfer.files?.[0];
-            if (file) void handleFile(file);
-          }}
+      <div
+        className={`rounded-lg border-2 border-dashed transition ${
+          dragging
+            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40'
+            : 'border-gray-300 dark:border-gray-700'
+        }`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          const file = event.dataTransfer.files?.[0];
+          if (file) void handleFile(file);
+        }}
+      >
+        <textarea
+          id="urls"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={'https://example.com/file.pdf?pageNumber=1\nhttps://example.com/file.pdf?pageNumber=3\nhttps://example.com/file.pdf?pageNumber=2'}
+          className="h-48 w-full resize-y bg-transparent p-3 text-sm outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
+          spellCheck={false}
+        />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          onClick={onAnalyze}
+          disabled={detecting || value.trim().length === 0}
+          className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <textarea
-            id="urls"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={'https://example.com/file.pdf?pageNumber=1\nhttps://example.com/file.pdf?pageNumber=3\nhttps://example.com/file.pdf?pageNumber=2'}
-            className="h-48 w-full resize-y bg-transparent p-3 text-sm text-cyan-100 outline-none placeholder:text-cyan-100/25"
-            spellCheck={false}
-          />
-          <span className="pointer-events-none absolute bottom-2 right-3 font-display text-[10px] uppercase tracking-widest text-cyan-500/50">
-            ▮ rec
-          </span>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button
-            onClick={onAnalyze}
-            disabled={detecting || value.trim().length === 0}
-            className="cyber-btn cyber-btn-primary disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {detecting ? 'Analyzing…' : 'Analyze URLs'}
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="cyber-btn cyber-btn-ghost"
-          >
-            Import .txt
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt,text/plain"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleFile(file);
-              event.target.value = '';
-            }}
-          />
-          <span className="ml-auto text-xs uppercase tracking-widest text-cyan-500/70">
-            {value.trim().split(/\r?\n/).filter(Boolean).length} URLs detected
-          </span>
-        </div>
+          {detecting ? 'Analyzing…' : 'Analyze URLs'}
+        </button>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          Import .txt
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,text/plain"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void handleFile(file);
+            event.target.value = '';
+          }}
+        />
+        <span className="text-xs text-gray-400">
+          {value.trim().split(/\r?\n/).filter(Boolean).length} URL(s) detected
+        </span>
       </div>
     </section>
   );

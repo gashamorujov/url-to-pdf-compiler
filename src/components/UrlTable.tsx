@@ -19,14 +19,14 @@ interface UrlTableProps {
 
 function StatusBadge({ status, error }: { status: UrlEntry['status']; error?: string }) {
   const styles = {
-    pending: 'border-cyan-500/30 text-cyan-400/70',
-    loading: 'border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(0,229,255,0.35)]',
-    loaded: 'border-emerald-400/60 text-emerald-300 shadow-[0_0_12px_rgba(16,255,160,0.25)]',
-    error: 'border-rose-500/60 text-rose-300 shadow-[0_0_12px_rgba(255,0,80,0.25)]',
+    pending: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+    loading: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+    loaded: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+    error: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
   };
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded border bg-black/30 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wider ${styles[status]}`} title={error}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${styles[status]}`} title={error}>
       {status === 'loading' && (
         <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -58,82 +58,100 @@ export function UrlTable({
   const showProgress = onLoadProgress !== null && onLoadProgress.done < onLoadProgress.total;
 
   return (
-    <section className="cyber-panel relative overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 border-b border-cyan-500/20 bg-cyan-500/5 px-4 py-3">
-        <span className="text-xs uppercase tracking-widest text-cyan-400">
-          {entries.length} URLs · {loadedCount} loaded{failedCount > 0 ? ` · ${failedCount} failed` : ''}
+    <section className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {entries.length} URL(s) · {loadedCount} loaded · {failedCount > 0 ? `${failedCount} failed` : ''}
         </span>
-        <span className="ml-auto flex items-center gap-1 text-xs uppercase tracking-widest text-cyan-500/70">
-          Concurrency:
+        <span className="ml-auto flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+          Concurrent:
           <select
             value={concurrency}
             onChange={(event) => onConcurrencyChange(Number(event.target.value))}
-            className="rounded border border-cyan-500/40 bg-[#070a18] px-1 py-0.5 text-xs text-cyan-200 outline-none focus:border-cyan-400"
+            className="rounded-md border border-gray-300 bg-white px-1 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-800"
           >
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-              <option key={n} value={n}>{n}</option>
+              <option key={n} value={n}>
+                {n}
+              </option>
             ))}
           </select>
         </span>
       </div>
 
+      {/* Progress bar */}
       {showProgress && (
-        <div className="border-b border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-xs text-cyan-300">
-          <div className="mb-1 flex justify-between uppercase tracking-widest">
+        <div className="bg-indigo-50 px-4 py-2 text-xs text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+          <div className="mb-1 flex justify-between">
             <span>Loading images…</span>
             <span>{onLoadProgress!.done} / {onLoadProgress!.total}</span>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-cyan-500/20">
+          <div className="h-1.5 w-full rounded-full bg-indigo-200 dark:bg-indigo-800">
             <div
-              className="h-full rounded-full bg-cyan-400 shadow-[0_0_12px_#00e5ff] transition-all duration-300"
+              className="h-full rounded-full bg-indigo-500 transition-all duration-300"
               style={{ width: `${(onLoadProgress!.done / onLoadProgress!.total) * 100}%` }}
             />
           </div>
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 border-b border-cyan-500/20 px-4 py-3">
+      {/* Actions */}
+      <div className="flex flex-wrap gap-2 px-4 py-3">
         {failedCount > 0 && (
-          <button onClick={onRetryAllFailed} className="cyber-btn cyber-btn-danger py-1.5 text-xs">
+          <button onClick={onRetryAllFailed} className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-400">
             Retry Failed ({failedCount})
           </button>
         )}
-        <button onClick={onClearAll} className="cyber-btn cyber-btn-ghost py-1.5 text-xs">Clear All</button>
-        <button onClick={onExportTxt} className="cyber-btn cyber-btn-ghost py-1.5 text-xs">Export TXT</button>
-        <button onClick={onExportCsv} className="cyber-btn cyber-btn-ghost py-1.5 text-xs">Export CSV</button>
+        <button onClick={onClearAll} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800">
+          Clear All
+        </button>
+        <button onClick={onExportTxt} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800">
+          Export TXT
+        </button>
+        <button onClick={onExportCsv} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-100 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800">
+          Export CSV
+        </button>
       </div>
 
+      {/* Table */}
       <div className="overflow-x-auto">
-        <table className="cyber-table w-full min-w-[600px] text-left text-sm">
+        <table className="w-full min-w-[600px] text-left text-sm">
           <thead>
-            <tr>
-              <th>#</th>
-              <th>Page</th>
-              <th>URL</th>
-              <th>Status</th>
-              <th>Preview</th>
-              <th>Action</th>
+            <tr className="border-t border-gray-100 text-xs uppercase text-gray-500 dark:border-gray-800 dark:text-gray-400">
+              <th className="px-4 py-2 font-medium">#</th>
+              <th className="px-4 py-2 font-medium">Page</th>
+              <th className="px-4 py-2 font-medium">URL</th>
+              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Preview</th>
+              <th className="px-4 py-2 font-medium">Action</th>
             </tr>
           </thead>
           <tbody>
             {entries.map((entry, index) => (
-              <tr key={entry.id} className="text-cyan-100/80 transition hover:bg-cyan-500/5">
-                <td className="border-b border-cyan-500/10 px-4 py-2 text-cyan-500/80">{index + 1}</td>
-                <td className="border-b border-cyan-500/10 px-4 py-2 font-bold tabular-nums text-cyan-300">{entry.pageNumber ?? '—'}</td>
-                <td className="max-w-[280px] truncate border-b border-cyan-500/10 px-4 py-2 font-mono text-xs text-cyan-100/60" title={entry.url}>{entry.url}</td>
-                <td className="border-b border-cyan-500/10 px-4 py-2"><StatusBadge status={entry.status} error={entry.error} /></td>
-                <td className="border-b border-cyan-500/10 px-4 py-2">
+              <tr key={entry.id} className="border-t border-gray-100 dark:border-gray-800">
+                <td className="px-4 py-2 text-gray-500 dark:text-gray-400">{index + 1}</td>
+                <td className="px-4 py-2 font-medium tabular-nums">{entry.pageNumber ?? '—'}</td>
+                <td className="max-w-[280px] truncate px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400" title={entry.url}>
+                  {entry.url}
+                </td>
+                <td className="px-4 py-2"><StatusBadge status={entry.status} error={entry.error} /></td>
+                <td className="px-4 py-2">
                   {entry.objectUrl ? (
-                    <img src={entry.objectUrl} alt={`Page ${entry.pageNumber ?? index + 1}`} className="h-10 w-14 rounded border border-cyan-500/30 object-cover" loading="lazy" />
+                    <img src={entry.objectUrl} alt={`Page ${entry.pageNumber ?? index + 1}`} className="h-10 w-14 rounded border object-cover dark:border-gray-700" loading="lazy" />
                   ) : (
-                    <span className="text-cyan-500/30">—</span>
+                    <span className="text-gray-300 dark:text-gray-700">—</span>
                   )}
                 </td>
-                <td className="border-b border-cyan-500/10 px-4 py-2">
+                <td className="px-4 py-2">
                   <div className="flex gap-1">
-                    <button onClick={() => onDelete(entry.id)} className="rounded px-2 py-1 text-sm text-cyan-500/70 transition hover:bg-rose-500/10 hover:text-rose-400" title="Delete">🗑</button>
+                    <button onClick={() => onDelete(entry.id)} className="rounded-md px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 hover:text-rose-600 dark:hover:bg-gray-800" title="Delete">
+                      🗑
+                    </button>
                     {entry.status === 'error' && (
-                      <button onClick={() => onRetry(entry.id)} className="rounded px-2 py-1 text-sm text-cyan-500/70 transition hover:bg-amber-500/10 hover:text-amber-400" title="Retry">🔄</button>
+                      <button onClick={() => onRetry(entry.id)} className="rounded-md px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 hover:text-amber-600 dark:hover:bg-gray-800" title="Retry">
+                        🔄
+                      </button>
                     )}
                   </div>
                 </td>

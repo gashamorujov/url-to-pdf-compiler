@@ -270,15 +270,13 @@ export default function App() {
   const failedCount = entries.filter((entry) => entry.status === 'error').length;
 
   return (
-    <div className="relative flex min-h-full flex-col overflow-x-hidden">
-      <div className="cyber-grid" aria-hidden />
-      <div className="cyber-scanline" aria-hidden />
+    <div className="flex min-h-full flex-col">
 
       <Header theme={theme} onToggleTheme={toggleTheme} />
 
       <Hero />
 
-      <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 pb-28">
+      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 pb-28">
         <UrlInput value={rawInput} onChange={setRawInput} onAnalyze={handleAnalyze} detecting={analyzing} />
 
         {analyzed && entries.length > 0 && (
