@@ -1,9 +1,16 @@
 import { handleProxyEvent } from '../src/server/proxy-core.mjs';
 
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}
+
 export default async (request) => {
   const url = new URL(request.url).searchParams.get('url');
   if (!url || typeof url !== 'string' || url.length > 8000) {
-    return Response.json({ error: 'Missing url parameter' }, { status: 400 });
+    return jsonResponse({ error: 'Missing url parameter' }, 400);
   }
   try {
     const result = await handleProxyEvent(url);
@@ -16,6 +23,6 @@ export default async (request) => {
       },
     });
   } catch (error) {
-    return Response.json({ error: error.message || 'Proxy error' }, { status: error.statusCode ?? 500 });
+    return jsonResponse({ error: error.message || 'Proxy error' }, error.statusCode ?? 500);
   }
 };

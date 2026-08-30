@@ -1,13 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { handleProxyEvent } from './src/server/proxy-core.mjs';
 
 /**
  * Built-in same-origin CORS proxy for the Vite dev server and `vite preview`.
  *   GET /@proxy?url=<encoded-image-url>
  * It is SSRF-protected, never forwards credentials, and only relays image
  * responses, so it never bypasses access control.
+ *
+ * The proxy core is imported *dynamically* (only when the middleware is hit)
+ * so that `vite build` never has to evaluate Node-native modules from the
+ * config file. This keeps CI/deploy builds (Netlify/Vercel) clean.
  */
 function builtInProxyPlugin() {
   const middleware = async (req, res) => {
@@ -22,6 +25,7 @@ function builtInProxyPlugin() {
     }
 
     try {
+      const { handleProxyEvent } = await import('./src/server/proxy-core.mjs');
       const result = await handleProxyEvent(target);
       res.writeHead(result.status, {
         ...result.headers,
