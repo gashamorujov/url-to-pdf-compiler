@@ -2,15 +2,16 @@
  * Bridge between the web app and the "IMO Authenticated Bridge" Chrome
  * extension (extension/ folder).
  *
- * The extension is the ONLY component allowed to read the authenticated IMO
- * session (cookies stay inside the browser). The web app talks to it through a
- * content script using window.postMessage. No credentials ever pass through
- * this code path.
+ * Security rules:
+ * - The extension handles all IMO communication.
+ * - Credentials are sent directly to IMO's own login page via the extension;
+ *   they are NEVER sent to our web app server, logged, or stored persistently.
+ * - The web app only stores a local "connected" flag in sessionStorage.
  */
 
 export interface ImoAuthResult {
-  available: boolean; // extension installed + bridge present?
-  authenticated: boolean | null; // null when unknown / not available
+  available: boolean;
+  authenticated: boolean | null;
   reason?: string;
 }
 
@@ -19,7 +20,8 @@ export const IMO_ORIGIN = 'https://imo-epublications.org';
 
 const BRIDGE_KEY = '__imo_bridge__';
 const PING_TIMEOUT_MS = 2000;
-const REQUEST_TIMEOUT_MS = 60000;
+const REQUEST_TIMEOUT_MS = 60_000;
+const CONNECTED_FLAG_KEY = 'imo_connected';
 
 export function isImoUrl(url: string): boolean {
   try {
@@ -30,7 +32,7 @@ export function isImoUrl(url: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Detection
+// Bridge messaging
 // ---------------------------------------------------------------------------
 
 let extensionAvailable: boolean | undefined;
@@ -64,11 +66,10 @@ async function bridgeRequest<T>(payload: Record<string, unknown>, timeoutMs = RE
   });
 }
 
-/**
- * Detect whether the extension (plus its content bridge) is available.
- * The content bridge is injected on ALL origins, so this works on any
- * deployment of the web app.
- */
+// ---------------------------------------------------------------------------
+// Extension detection
+// ---------------------------------------------------------------------------
+
 export async function isExtensionAvailable(): Promise<boolean> {
   if (extensionAvailable !== undefined) return extensionAvailable;
   try {
@@ -85,30 +86,45 @@ export function resetExtensionDetection() {
 }
 
 // ---------------------------------------------------------------------------
-// Authentication status (no credentials are involved — just cookie presence)
+// Connected state (app-local — does NOT touch IMO server or cookies)
 // ---------------------------------------------------------------------------
 
-export async function checkImoAuth(): Promise<ImoAuthResult> {
+export function isConnected(): boolean {
+  try {
+    return sessionStorage.getItem(CONNECTED_FLAG_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setConnected(val: boolean) {
+  try {
+    sessionStorage.setItem(CONNECTED_FLAG_KEY, val ? 'true' : 'false');
+  } catch { /* noop */ }
+}
+
+// ---------------------------------------------------------------------------
+// Authentication status
+// ---------------------------------------------------------------------------
+
+export async function checkImoAuth(): Promise<ImoAuthResult & { connected?: boolean }> {
+  const connected = isConnected();
   const available = await isExtensionAvailable();
   if (!available) {
-    return { available: false, authenticated: null };
+    return { available: false, authenticated: null, connected };
   }
   try {
     const result = await bridgeRequest<{ authenticated: boolean; reason?: string }>({
       type: 'IMO_CHECK_AUTH',
-    }, 20000);
-    return { available: true, authenticated: result.authenticated, reason: result.reason };
+    }, 20_000);
+    return { available: true, authenticated: result.authenticated, reason: result.reason, connected };
   } catch (error) {
-    return {
-      available: true,
-      authenticated: null,
-      reason: error instanceof Error ? error.message : 'Session check failed',
-    };
+    return { available: true, authenticated: null, reason: error instanceof Error ? error.message : 'Session check failed', connected };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Image download through the authenticated session
+// Image fetch
 // ---------------------------------------------------------------------------
 
 export interface ImoFetchedImage {
@@ -132,23 +148,37 @@ export async function fetchImoImage(url: string): Promise<ImoFetchedImage> {
 }
 
 // ---------------------------------------------------------------------------
-// Login helper
+// Login (credentials → IMO login page directly, never to our server)
 // ---------------------------------------------------------------------------
 
 /**
- * Open the official IMO sign-in page in a new tab (routed through the
- * extension so it opens reliably and carries the extension context). All
- * authentication happens on the IMO domain; this app never collects credentials.
+ * Open IMO's login page and auto-fill the credentials using the login-fill
+ * content script.  Credentials travel from this page → extension background →
+ * login-fill.js on the IMO page → IMO's own form.  They are NEVER stored
+ * persistently, never logged, and never sent to any server other than IMO's
+ * own endpoint.
  */
-export async function openImoLogin(): Promise<void> {
-  const available = await isExtensionAvailable();
-  if (available) {
-    try {
-      await bridgeRequest<{ ok: boolean }>({ type: 'IMO_OPEN_LOGIN' }, 5000);
-      return;
-    } catch {
-      // fall through to window.open fallback
-    }
-  }
-  window.open(IMO_LOGIN_URL, '_blank', 'noopener');
+export async function loginImo(username: string, password: string): Promise<void> {
+  await bridgeRequest<{ ok: boolean }>({
+    type: 'IMO_LOGIN',
+    username,
+    password,
+  }, 120_000);
+}
+
+// ---------------------------------------------------------------------------
+// Logout
+// ---------------------------------------------------------------------------
+
+/**
+ * Clear the app-local "IMO connected" flag only.
+ * Does NOT log the user out of imo-epublications.org — it simply removes our
+ * app's knowledge of the connection.  The user must log in again via the form.
+ */
+export async function logoutImo(): Promise<void> {
+  setConnected(false);
+  resetExtensionDetection();
+  try {
+    await bridgeRequest<{ ok: boolean }>({ type: 'IMO_LOGOUT' }, 5000);
+  } catch { /* extension may not be installed */ }
 }

@@ -158,7 +158,55 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  // --- Open IMO login page in a new tab ---
+
+  // --- Login: open IMO login page and relay credentials to login-fill.js ---
+  if (message.type === 'IMO_LOGIN') {
+    const { username, password } = message;
+    if (!username || !password) {
+      sendResponse({ ok: false, error: 'Username and password are required.' });
+      return true;
+    }
+
+    (async () => {
+      const tab = await chrome.tabs.create({ url: IMO_LOGIN_URL, active: true });
+
+      // Wait for the IMO login page (incl. Cloudflare challenge) to load,
+      // then send the credentials to login-fill.js. We retry for up to 90s.
+      const startedAt = Date.now();
+      const attempt = async () => {
+        try {
+          const response = await chrome.tabs.sendMessage(tab.id, {
+            type: 'IMO_LOGIN_FILL',
+            username,
+            password,
+          });
+          if (response && response.ok) {
+            sendResponse({ ok: true, message: 'Login form filled on IMO tab.' });
+            return;
+          }
+          throw new Error('no login-fill listener ready');
+        } catch {
+          if (Date.now() - startedAt < 90_000) {
+            setTimeout(attempt, 700);
+          } else {
+            sendResponse({ ok: false, error: 'Timed out waiting for the IMO login form.' });
+          }
+        }
+      };
+      void attempt();
+    })();
+
+    return true; // async
+  }
+
+  // --- Logout: clear the app-side connection state (leave IMO session intact) ---
+  if (message.type === 'IMO_LOGOUT') {
+    // This extension keeps no persisted credentials. The web app clears its
+    // own "connected" state; the IMO browser session itself is left untouched.
+    sendResponse({ ok: true });
+    return false;
+  }
+
   if (message.type === 'IMO_OPEN_LOGIN') {
     chrome.tabs.create({ url: IMO_LOGIN_URL });
     sendResponse({ ok: true });
