@@ -1,7 +1,8 @@
 import type { UrlEntry } from '../types';
 import { isSameOrigin } from './analyze';
+import { fetchImoImage, isExtensionAvailable, isImoUrl } from './imoExtension';
 
-export type LoadErrorCode = 'network' | 'cors' | 'http' | 'invalid' | 'timeout';
+export type LoadErrorCode = 'network' | 'cors' | 'http' | 'invalid' | 'timeout' | 'auth' | 'pdf';
 
 export interface LoadResult {
   blob: Blob;
@@ -88,18 +89,31 @@ async function consumeResponse(response: Response): Promise<LoadResult> {
   if (!response.ok) {
     const status = response.status;
     let message = `HTTP ${status}`;
-    if (status === 401) message = 'HTTP 401 — the remote server requires authentication. This app does not bypass access control.';
-    if (status === 403) message = 'HTTP 403 — access to this resource is forbidden. This app does not bypass access control.';
-    throw new LoadFailure('http', message, status);
+    if (status === 401) message = 'IMO premium login required (HTTP 401)';
+    if (status === 403) message = 'IMO premium login required (HTTP 403)';
+    throw new LoadFailure(status === 401 || status === 403 ? 'auth' : 'http', message, status);
   }
 
   const contentType = response.headers.get('content-type') ?? '';
   if (!contentType.toLowerCase().startsWith('image/')) {
+    // PDF responses are handled separately by the caller (renderPdfPagesToJpeg).
+    if (/application\/pdf/i.test(contentType)) {
+      throw new LoadFailure('pdf', 'PDF response — page rendering required', 0);
+    }
     throw new LoadFailure('invalid', `Response is not an image (${contentType || 'no content-type header'})`);
   }
 
   const blob = await response.blob();
   return { blob, contentType };
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta, data] = dataUrl.split(',', 2);
+  const mime = /data:([^;]+)/.exec(meta)?.[1] || 'image/jpeg';
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: mime });
 }
 
 async function directFetch(url: string, timeoutMs: number): Promise<LoadResult> {
@@ -151,16 +165,43 @@ async function proxyFetch(url: string, timeoutMs: number): Promise<LoadResult> {
 }
 
 /**
- * Fetch an image blob. Tries the direct (CORS-permitting) request first; on
- * CORS/network/timeout failures only, falls back to the same-origin secure
- * proxy. HTTP 4xx/5xx and non-image responses are surfaced immediately and are
- * never retried via the proxy (access control is never bypassed).
+ * Fetch a blob for an IMO URL using the Chrome extension's authenticated
+ * session. Returns the image (or PDF) bytes as a blob.
  */
-export async function fetchImageBlob(url: string, timeoutMs = REQUEST_TIMEOUT_MS): Promise<LoadResult> {
+async function fetchImoViaExtension(url: string): Promise<LoadResult & { isPdf?: boolean }> {
+  const image = await fetchImoImage(url);
+  const blob = dataUrlToBlob(image.dataUrl);
+  return { blob, contentType: image.contentType, isPdf: image.isPdf };
+}
+
+/**
+ * Fetch an image blob. For imo-epublications.org URLs, the authenticated Chrome
+ * extension is tried first; otherwise the secure proxy/direct pipeline is used
+ * (which will surface 401/403 without bypassing access control).
+ */
+export async function fetchImageBlob(url: string, timeoutMs = REQUEST_TIMEOUT_MS): Promise<LoadResult & { isPdf?: boolean }> {
+  // IMO URLs -> authenticated extension path (if installed)
+  if (isImoUrl(url)) {
+    const available = await isExtensionAvailable();
+    if (available) {
+      try {
+        return await fetchImoViaExtension(url);
+      } catch (error) {
+        if (error instanceof LoadFailure) throw error;
+        const message = error instanceof Error ? error.message : 'IMO fetch failed';
+        if (/login/i.test(message) || /401|403/.test(message)) {
+          throw new LoadFailure('auth', 'IMO premium login required', 0);
+        }
+        // Extension failed (timeout/crash) -> fall through to proxy/direct so
+        // the non-authenticated path can still report 401/403 cleanly.
+      }
+    }
+  }
+
   try {
     return await directFetch(url, timeoutMs);
   } catch (error) {
-    if (error instanceof LoadFailure && (error.code === 'http' || error.code === 'invalid')) throw error;
+    if (error instanceof LoadFailure && (error.code === 'http' || error.code === 'invalid' || error.code === 'auth')) throw error;
     // CORS / network / timeout -> try the secure proxy fallback.
   }
   return proxyFetch(url, PROXY_TIMEOUT_MS);

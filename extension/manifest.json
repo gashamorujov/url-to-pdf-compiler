@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "IMO Authenticated Bridge",
+  "version": "1.0.0",
+  "description": "Bridges your authenticated imo-epublications.org session to the URL-to-PDF web app. Uses your existing browser session only — no passwords read, no credentials forwarded or stored.",
+  "permissions": [],
+  "host_permissions": [
+    "https://imo-epublications.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "https://*.vercel.app/*",
+        "https://*.netlify.app/*",
+        "https://*.github.io/*"
+      ],
+      "js": ["content-bridge.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

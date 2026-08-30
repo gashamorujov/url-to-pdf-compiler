@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { UrlEntry, PreviewMode, LoadProgress, PdfProgress } from './types';
 import { analyzeUrls } from './lib/analyze';
 import { ConcurrencyQueue, errorMessageFor, fetchImageBlob, prepareForPdf, type EntryPatch } from './lib/imageLoader';
+import { renderPdfPagesToJpeg } from './lib/pdfToImage';
 import { exportUrlsCsv, exportUrlsTxt, triggerDownload } from './lib/export';
 import { generatePdf, type PdfPageInput } from './lib/pdfGenerator';
 import { useTheme } from './hooks/useTheme';
@@ -15,6 +16,7 @@ import { PreviewPanel } from './components/PreviewPanel';
 import { ActionBar } from './components/ActionBar';
 import { PdfModal } from './components/PdfModal';
 import { FailedWarningModal } from './components/FailedWarningModal';
+import { ImoAuthBar } from './components/ImoAuthBar';
 import { ToastStack } from './components/ToastStack';
 
 function normalizeFilename(name: string): string {
@@ -73,7 +75,18 @@ export default function App() {
         patchEntry(entry.id, { status: 'loading', error: undefined });
         try {
           const raw = await fetchImageBlob(entry.url);
-          const prepared = await prepareForPdf(raw);
+          let prepared: { blob: Blob; contentType: string };
+
+          if (raw.isPdf) {
+            const pageNumber = entry.pageNumber ?? 1;
+            const pages = await renderPdfPagesToJpeg(await raw.blob.arrayBuffer(), [pageNumber]);
+            const rendered = pages.get(pageNumber);
+            if (!rendered) throw new Error(`PDF has no page ${pageNumber}`);
+            prepared = { blob: rendered, contentType: 'image/jpeg' };
+          } else {
+            prepared = await prepareForPdf(raw);
+          }
+
           let objectUrl = '';
           if (prepared.contentType === 'image/png') {
             objectUrl = URL.createObjectURL(new Blob([prepared.blob], { type: 'image/png' }));
@@ -268,6 +281,7 @@ export default function App() {
 
   const loadedCount = entries.filter((entry) => entry.status === 'loaded').length;
   const failedCount = entries.filter((entry) => entry.status === 'error').length;
+  const authFailedCount = entries.filter((entry) => entry.status === 'error' && /login required/i.test(entry.error ?? '')).length;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -277,6 +291,8 @@ export default function App() {
       <Hero />
 
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 pb-28">
+        <ImoAuthBar hasAuthErrors={authFailedCount > 0} />
+
         <UrlInput value={rawInput} onChange={setRawInput} onAnalyze={handleAnalyze} detecting={analyzing} />
 
         {analyzed && entries.length > 0 && (
