@@ -1,7 +1,4 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "functions": {
-    "api/image-proxy.mjs": { "runtime": "nodejs20.x" }
-  }
+  "outputDirectory": "dist"
 }
