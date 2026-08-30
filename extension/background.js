@@ -1,67 +1,66 @@
 /**
  * IMO e-Publications Authenticated Bridge — background service worker.
  *
- * Security rules (strictly enforced):
- *  - Uses ONLY the user's already-active session in the browser.
- *  - Never reads, stores, or forwards passwords, tokens, or cookies.
- *  - Never bypasses login requirements, DRM, or premium access control.
- *  - Reports 401/403 as "login required" so the user can sign in legitimately.
- *  - Scoped to https://imo-epublications.org/* only via host_permissions.
+ * Architecture:
+ *  - Uses the user's EXISTING browser session cookies for imo-epublications.org
+ *  - Never reads, stores, or forwards passwords, tokens, or cookie values
+ *  - Never bypasses login or premium access control
+ *  - Auth status is determined by making a REAL fetch and checking the response
+ *  - "Login successful" is ONLY shown after IMO server confirms a valid session
  */
 
-const IMO_LOGIN_URL = 'https://imo-epublications.org/registration/signin-or-register.action?signInTarget=%2F';
-const IMO_HOME = 'https://imo-epublications.org/';
+const IMO_ORIGIN = 'https://imo-epublications.org';
 
 const isImoUrl = (url) => {
-  try {
-    return new URL(url).origin === 'https://imo-epublications.org';
-  } catch {
-    return false;
-  }
+  try { return new URL(url).origin === IMO_ORIGIN; } catch { return false; }
 };
 
 /**
- * Check if the user has an active IMO session via cookies.
- * JSESSIONID is set by IMO's server on any session; the presence of this cookie
- * means the browser has established a session with imo-epublications.org and
- * those cookies will be sent with subsequent requests.
+ * Auth probe: make a REAL fetch to IMO and check the HTTP response.
+ * This is the ONLY way to determine actual authentication status.
+ * - 200 + image/content → authenticated (or public content, which is fine)
+ * - 401/403 → not authenticated
+ * - Network error → unknown
  */
-async function checkSessionViaCookies() {
+async function probeAuth() {
   try {
-    const cookies = await chrome.cookies.getAll({ domain: 'imo-epublications.org' });
-    const sessionCookies = cookies.filter(
-      (c) => c.name === 'JSESSIONID' || c.name.includes('SESSION') || c.name === 'AWSALB'
-    );
-    return sessionCookies.length > 0;
-  } catch {
-    return false;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    const response = await fetch(IMO_ORIGIN + '/', {
+      signal: controller.signal,
+      credentials: 'include',
+      redirect: 'follow',
+      headers: { Accept: 'text/html,*/*;q=0.8' },
+    });
+    clearTimeout(timer);
+
+    const url = response.url || '';
+    // If redirected to a login/sign-in page, the user is not authenticated
+    if (/signin|login|register/i.test(url) && url !== IMO_ORIGIN + '/') {
+      return { authenticated: false, reason: 'Redirected to login page — not authenticated on IMO.' };
+    }
+    if (response.status === 401 || response.status === 403) {
+      return { authenticated: false, reason: `IMO returned HTTP ${response.status} — not authenticated.` };
+    }
+    if (response.ok) {
+      // Check if the page content looks like a logged-in page vs a login page
+      const body = await response.text();
+      if (/name="password"/i.test(body) || /sign.?in.*form/i.test(body)) {
+        return { authenticated: false, reason: 'IMO homepage shows login form — not authenticated.' };
+      }
+      return { authenticated: true };
+    }
+    return { authenticated: false, reason: `IMO returned HTTP ${response.status}` };
+  } catch (error) {
+    return { authenticated: false, reason: `Could not reach IMO: ${error.message}` };
   }
 }
 
 /**
- * Probe a known deliver URL (lightweight) to determine actual session state.
- * If the server returns image content → session is active.
- * If 401/403 → not authenticated.
+ * Fetch a URL with the user's browser session cookies (credentials: include).
+ * This is how the extension leverages the user's existing IMO session.
  */
-async function probeSession() {
-  // First: quick cookie check (instant, no network)
-  const hasCookies = await checkSessionViaCookies();
-
-  // Second: try the IMO homepage with credentials. The homepage may return 403
-  // to bot-like requests (Cloudflare) but with the browser's TLS + cookies it
-  // should return the logged-in page. Even if it returns 403 from the SW, we
-  // treat cookie presence as a strong signal of an active session.
-  if (!hasCookies) {
-    return { authenticated: false, reason: 'No IMO session cookies found. Please log in on imo-epublications.org first.' };
-  }
-
-  // Cookies are present — the user has an active session with IMO.
-  // We cannot reliably probe the homepage (Cloudflare may block SW fetches),
-  // so cookie presence is the best offline signal.
-  return { authenticated: true };
-}
-
-async function fetchWithSession(url, { timeoutMs = 45000 } = {}) {
+async function fetchWithSession(url, { timeoutMs = 60_000 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -94,15 +93,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return false;
   }
 
-  // --- Check IMO authentication status ---
+  // --- Check IMO authentication status (REAL probe — no cookie presence check) ---
   if (message.type === 'IMO_CHECK_AUTH') {
-    probeSession()
+    probeAuth()
       .then((result) => sendResponse({ ok: true, ...result }))
-      .catch((error) => sendResponse({ ok: false, authenticated: false, error: error.message || 'Session check failed' }));
+      .catch((error) => sendResponse({ ok: false, authenticated: false, error: error.message || 'Auth probe failed' }));
     return true;
   }
 
-  // --- Fetch a single image with authenticated session ---
+  // --- Fetch a single image/PDF with authenticated session ---
   if (message.type === 'IMO_FETCH_IMAGE') {
     const { url, entryId } = message;
     if (!url || !isImoUrl(url)) {
@@ -115,8 +114,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         if (response.status === 401 || response.status === 403) {
           await response.text().catch(() => {});
           sendResponse({
-            ok: false,
-            entryId,
+            ok: false, entryId,
             code: 'IMO_LOGIN_REQUIRED',
             status: response.status,
             error: `IMO premium login required (HTTP ${response.status})`,
@@ -145,10 +143,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         sendResponse({
-          ok: false,
-          entryId,
-          code: 'NOT_IMAGE',
-          contentType,
+          ok: false, entryId, code: 'NOT_IMAGE', contentType,
           error: `Response is not an image (${contentType || 'no content-type'})`,
         });
       })
@@ -158,57 +153,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-
-  // --- Login: open IMO login page and relay credentials to login-fill.js ---
-  if (message.type === 'IMO_LOGIN') {
-    const { username, password } = message;
-    if (!username || !password) {
-      sendResponse({ ok: false, error: 'Username and password are required.' });
-      return true;
-    }
-
-    (async () => {
-      const tab = await chrome.tabs.create({ url: IMO_LOGIN_URL, active: true });
-
-      // Wait for the IMO login page (incl. Cloudflare challenge) to load,
-      // then send the credentials to login-fill.js. We retry for up to 90s.
-      const startedAt = Date.now();
-      const attempt = async () => {
-        try {
-          const response = await chrome.tabs.sendMessage(tab.id, {
-            type: 'IMO_LOGIN_FILL',
-            username,
-            password,
-          });
-          if (response && response.ok) {
-            sendResponse({ ok: true, message: 'Login form filled on IMO tab.' });
-            return;
-          }
-          throw new Error('no login-fill listener ready');
-        } catch {
-          if (Date.now() - startedAt < 90_000) {
-            setTimeout(attempt, 700);
-          } else {
-            sendResponse({ ok: false, error: 'Timed out waiting for the IMO login form.' });
-          }
-        }
-      };
-      void attempt();
-    })();
-
-    return true; // async
-  }
-
-  // --- Logout: clear the app-side connection state (leave IMO session intact) ---
-  if (message.type === 'IMO_LOGOUT') {
-    // This extension keeps no persisted credentials. The web app clears its
-    // own "connected" state; the IMO browser session itself is left untouched.
-    sendResponse({ ok: true });
-    return false;
-  }
-
+  // --- Open IMO login page in a new tab (user logs in on IMO's own page) ---
   if (message.type === 'IMO_OPEN_LOGIN') {
-    chrome.tabs.create({ url: IMO_LOGIN_URL });
+    chrome.tabs.create({ url: 'https://imo-epublications.org/registration/signin-or-register.action?signInTarget=%2F' });
     sendResponse({ ok: true });
     return false;
   }
