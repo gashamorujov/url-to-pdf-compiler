@@ -15,8 +15,6 @@ import { PdfModal } from './components/PdfModal';
 import { FailedWarningModal } from './components/FailedWarningModal';
 import { ToastStack } from './components/ToastStack';
 
-const CORS_PROXY_ENV = import.meta.env.VITE_CORS_PROXY as string | undefined;
-
 function normalizeFilename(name: string): string {
   return name.toLowerCase().endsWith('.pdf') ? name : `${name}.pdf`;
 }
@@ -72,8 +70,7 @@ export default function App() {
       return queue.run(async () => {
         patchEntry(entry.id, { status: 'loading', error: undefined });
         try {
-          const proxyBase = CORS_PROXY_ENV || undefined;
-          const raw = await fetchImageBlob(entry.url, proxyBase);
+          const raw = await fetchImageBlob(entry.url);
           const prepared = await prepareForPdf(raw);
           let objectUrl = '';
           if (prepared.contentType === 'image/png') {

@@ -19,51 +19,151 @@ export class LoadFailure extends Error {
   }
 }
 
-const REQUEST_TIMEOUT_MS = 20_000;
+const REQUEST_TIMEOUT_MS = 25_000;
+const PROXY_TIMEOUT_MS = 40_000;
+const MAX_URL_LENGTH = 8000;
 
 /**
- * Fetch an image blob. If `proxyBase` is configured, the target URL is encoded and
- * appended to the proxy endpoint (the proxy is expected to return the image with
- * permissive CORS headers).
+ * Candidate same-origin CORS proxy endpoints, in order of preference.
+ * Only one that actually exists on the deployed host is used.
  */
-export async function fetchImageBlob(
-  url: string,
-  proxyBase?: string,
-  timeoutMs = REQUEST_TIMEOUT_MS,
-): Promise<LoadResult> {
+const PROXY_CANDIDATES = [
+  '/@proxy',
+  '/api/image-proxy',
+  '/.netlify/functions/image-proxy',
+];
+
+let cachedProxyEndpoint: string | null | undefined;
+
+function explicitProxyEnv(): string | undefined {
+  const value = import.meta.env.VITE_CORS_PROXY as string | undefined;
+  if (value && value.trim()) return value.trim().replace(/\/$/, '');
+  return undefined;
+}
+
+/**
+ * Find a working proxy endpoint. The explicit `VITE_CORS_PROXY` wins; otherwise
+ * the same-origin candidates are probed (cheap 404 checks) and cached.
+ */
+async function resolveProxyEndpoint(): Promise<string> {
+  if (cachedProxyEndpoint !== undefined) {
+    if (cachedProxyEndpoint === null) {
+      throw new LoadFailure('network', 'No CORS proxy endpoint is available on this host. Deploy the bundled proxy function (netlify/functions or api/) or set VITE_CORS_PROXY.');
+    }
+    return cachedProxyEndpoint;
+  }
+
+  const explicit = explicitProxyEnv();
+  if (explicit) {
+    cachedProxyEndpoint = explicit;
+    return explicit;
+  }
+
+  const probeController = new AbortController();
+  const probeTimer = setTimeout(() => probeController.abort(), 5000);
+  try {
+    for (const path of PROXY_CANDIDATES) {
+      try {
+        const probe = await fetch(`${path}?url=__probe__`, {
+          method: 'GET',
+          signal: probeController.signal,
+        });
+        if (probe.status !== 404 && probe.status !== 405) {
+          cachedProxyEndpoint = path;
+          return path;
+        }
+      } catch {
+        // host not found / network issue - try the next candidate
+      }
+    }
+  } finally {
+    clearTimeout(probeTimer);
+  }
+
+  cachedProxyEndpoint = null;
+  throw new LoadFailure('network', 'No CORS proxy endpoint is available on this host. Deploy the bundled proxy function (netlify/functions or api/) or set VITE_CORS_PROXY.');
+}
+
+async function consumeResponse(response: Response): Promise<LoadResult> {
+  if (!response.ok) {
+    const status = response.status;
+    let message = `HTTP ${status}`;
+    if (status === 401) message = 'HTTP 401 — the remote server requires authentication. This app does not bypass access control.';
+    if (status === 403) message = 'HTTP 403 — access to this resource is forbidden. This app does not bypass access control.';
+    throw new LoadFailure('http', message, status);
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.toLowerCase().startsWith('image/')) {
+    throw new LoadFailure('invalid', `Response is not an image (${contentType || 'no content-type header'})`);
+  }
+
+  const blob = await response.blob();
+  return { blob, contentType };
+}
+
+async function directFetch(url: string, timeoutMs: number): Promise<LoadResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  const target = proxyBase && proxyBase.trim()
-    ? `${proxyBase.replace(/\/?$/, '/')}${encodeURIComponent(url)}`
-    : url;
-
   try {
-    const response = await fetch(target, { mode: 'cors', signal: controller.signal });
-    if (!response.ok) {
-      throw new LoadFailure('http', `HTTP ${response.status}`, response.status);
-    }
-
-    const contentType = response.headers.get('content-type') ?? '';
-    if (!contentType.toLowerCase().startsWith('image/')) {
-      throw new LoadFailure('invalid', 'Response is not an image');
-    }
-
-    const blob = await response.blob();
-    return { blob, contentType };
-  } catch (err) {
-    if (err instanceof LoadFailure) throw err;
-    if (err instanceof DOMException && err.name === 'AbortError') {
+    const response = await fetch(url, { mode: 'cors', signal: controller.signal });
+    return await consumeResponse(response);
+  } catch (error) {
+    if (error instanceof LoadFailure) throw error;
+    if (error instanceof DOMException && error.name === 'AbortError') {
       throw new LoadFailure('timeout', 'Request timed out');
     }
-    // A TypeError from fetch almost always means CORS or pure network failure.
     throw new LoadFailure(
       isSameOrigin(url) ? 'network' : 'cors',
-      isSameOrigin(url) ? 'Network error' : 'CORS blocked',
+      isSameOrigin(url) ? 'Network error' : 'CORS blocked by the remote server',
     );
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function proxyFetch(url: string, timeoutMs: number): Promise<LoadResult> {
+  const endpoint = await resolveProxyEndpoint();
+  const target = `${endpoint}?url=${encodeURIComponent(url)}`;
+
+  if (target.length > MAX_URL_LENGTH + endpoint.length) {
+    throw new LoadFailure('invalid', 'URL is too long to proxy');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(target, {
+      mode: 'cors',
+      signal: controller.signal,
+      headers: { Accept: 'image/*,*/*;q=0.8' },
+    });
+    return await consumeResponse(response);
+  } catch (error) {
+    if (error instanceof LoadFailure) throw error;
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new LoadFailure('timeout', 'Proxy request timed out');
+    }
+    throw new LoadFailure('network', 'CORS proxy request failed');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Fetch an image blob. Tries the direct (CORS-permitting) request first; on
+ * CORS/network/timeout failures only, falls back to the same-origin secure
+ * proxy. HTTP 4xx/5xx and non-image responses are surfaced immediately and are
+ * never retried via the proxy (access control is never bypassed).
+ */
+export async function fetchImageBlob(url: string, timeoutMs = REQUEST_TIMEOUT_MS): Promise<LoadResult> {
+  try {
+    return await directFetch(url, timeoutMs);
+  } catch (error) {
+    if (error instanceof LoadFailure && (error.code === 'http' || error.code === 'invalid')) throw error;
+    // CORS / network / timeout -> try the secure proxy fallback.
+  }
+  return proxyFetch(url, PROXY_TIMEOUT_MS);
 }
 
 /**
